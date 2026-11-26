@@ -1,21 +1,19 @@
-
 name: Build Reql Client 26.3
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main", "master" ]
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Build Fabric Mod
+    name: Compile Fabric mod
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java 25
@@ -23,39 +21,49 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+          cache: gradle
 
-      - name: Set up Gradle
+      - name: Set up Gradle 9.8.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.8.1'
 
-      - name: Verify ZIP
+      - name: Extract project ZIP when uploaded at repository root
+        shell: bash
         run: |
-          ls -la
-          test -f Reql-Client-26.3-GitHub-FIX1.zip
+          set -euo pipefail
+          if [ -f Reql-Client-26.3-GitHub.zip ]; then
+            unzip -o Reql-Client-26.3-GitHub.zip
+          fi
 
-      - name: Extract project
+      - name: Find Gradle project
+        shell: bash
         run: |
-          unzip -o Reql-Client-26.3-GitHub-FIX1.zip
-          test -f Reql-Client-26.3/settings.gradle
-          test -f Reql-Client-26.3/build.gradle
+          set -euo pipefail
+          if [ -f settings.gradle ] && [ -f build.gradle ]; then
+            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
+          elif [ -f Reql-Client-26.3/settings.gradle ] && [ -f Reql-Client-26.3/build.gradle ]; then
+            echo "PROJECT_DIR=Reql-Client-26.3" >> "$GITHUB_ENV"
+          else
+            echo "ERROR: Gradle files not found. Upload the ZIP to the repository root."
+            find . -maxdepth 3 -type f | sort
+            exit 1
+          fi
 
-      - name: Build mod
-        run: gradle -p Reql-Client-26.3 build --no-daemon
+      - name: Compile
+        run: gradle -p "$PROJECT_DIR" clean build --no-daemon --stacktrace
 
-      - name: Prepare JAR
+      - name: Collect production JAR
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p artifacts
-          find Reql-Client-26.3/build/libs \
-            -maxdepth 1 \
-            -type f \
-            -name '*.jar' \
-            ! -name '*-dev.jar' \
-            ! -name '*-sources.jar' \
+          find "$PROJECT_DIR/build/libs" -maxdepth 1 -type f -name '*.jar' \
+            ! -name '*-sources.jar' ! -name '*-dev.jar' \
             -exec cp {} artifacts/ \;
-          test -n "$(find artifacts -name '*.jar' -print -quit)"
+          test -n "$(find artifacts -maxdepth 1 -name '*.jar' -print -quit)"
 
-      - name: Upload compiled JAR
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: Reql-Client-26.3
