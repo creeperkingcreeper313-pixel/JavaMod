@@ -4,7 +4,6 @@ name: Build Reql Client 26.3
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -12,13 +11,13 @@ permissions:
 
 jobs:
   build:
-    name: Build Fabric mod
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 25
+      - name: Set up Java 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -29,20 +28,19 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Build mod
-        run: gradle build --no-daemon
-
-      - name: Collect remapped mod JAR
-        shell: bash
+      - name: Extract project
         run: |
-          mkdir -p artifacts
-          find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-dev.jar' ! -name '*-sources.jar' -exec cp {} artifacts/ \;
-          test -n "$(find artifacts -maxdepth 1 -type f -name '*.jar' -print -quit)"
+          unzip Reql-Client-26.3-GitHub.zip
+          test -f Reql-Client-26.3/settings.gradle
+          test -f Reql-Client-26.3/build.gradle
 
-      - name: Upload mod JAR
+      - name: Build mod
+        run: gradle -p Reql-Client-26.3 build --no-daemon
+
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: Reql-Client-26.3
-          path: artifacts/*.jar
+          path: Reql-Client-26.3/build/libs/*.jar
           if-no-files-found: error
-          retention-days: 14
+          
